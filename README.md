@@ -19,3 +19,6 @@ This is for extra information for the login server, please use our Launcher repo
 ### Ports Used:
 - TLS3 Server: 8657 (Can be modified in .env)
 - Auth Webserver: 8658 (Can be modified in .env, not recommended.)
+
+### Public Hosting of Login Server
+While hosting the Login server is allowed. It is recommended that you use a reverse proxy using Nginix or Apache to make sure the Webserver is using HTTPS.
