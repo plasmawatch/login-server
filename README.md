@@ -5,5 +5,9 @@ Join the discord: https://discord.gg/T5RncE2RkN
 
 Written in Go
 
+### Default Ports
+TCP/TLS3: 1119
+Webserver: 6969
+
 ### Public Hosting of Login Server
 While hosting the Login server is allowed. It is recommended that you use a reverse proxy using Nginix or Apache to make sure the Webserver is using HTTPS.
