@@ -1,0 +1,6 @@
+bgs
+*.bin
+
+!packets/proto/bgs
+*.proto
+*.exe
