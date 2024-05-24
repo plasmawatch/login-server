@@ -1,14 +1,18 @@
 package webserver
 
 import (
+	"bnet-mock/network/account_manager"
 	"bnet-mock/network/client/rest/login"
 	"crypto/tls"
 	"fmt"
+	"log"
+
 	"github.com/gofiber/fiber/v2"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-	"log"
 )
+
+var accMgr = &account_manager.AccountMgr{} // Global instance
 
 func StartWebServer(cer tls.Certificate) {
 	form := new(login.FormInputs)
@@ -42,9 +46,7 @@ func StartWebServer(cer tls.Certificate) {
 	app.Get("/battlenet/login", func(c *fiber.Ctx) error {
 		//c.Cookies("web.id", "US-b330f9b9-7896-44e7-aa80-84532857ab7b")
 		//c.Cookies("JSESSIONID", "23007ab6-fc44-4b96-bd61-69e5eda7cdc6")
-		c.Set("Content-Type", "application/json;charset=utf-8")
-		c.Set("X-Frame-Options", "DENY")
-		c.Set("Server", "Apache")
+		SetCommonHeaders(c)
 		// c.Set("Content-Length", fmt.Sprintf("%d", len(form.)))
 
 		c.Cookie(&fiber.Cookie{
@@ -74,6 +76,7 @@ func StartWebServer(cer tls.Certificate) {
 		var l login.LoginForm
 		if err := c.BodyParser(&l); err != nil {
 			log.Print(err)
+			return SendErrorResponse(c, "There was an internal error, failed to parse login form.")
 		}
 
 		/*
@@ -85,19 +88,60 @@ func StartWebServer(cer tls.Certificate) {
 
 		log.Print(l.String())
 
-		// payload := `{"authentication_state": "LOGIN","error_code": "INVALID_ACCOUNT_OR_CREDENTIALS","error_message": "We couwdn't vewify youw account wiwth dawt infowmawtion.","input_id": "password","support_error_code": "BLZBNTTAS00000002","error_status": "WARNING","error_message_helper": "Please enter your password."}`
+		if len(l.GetInputs()) < 2 {
+			log.Print("Too few login form inputs!")
+			return SendErrorResponse(c, "There was an internal error, too few login form inputs.")
+		}
 
-		payload := `{"authentication_state": "DONE","login_ticket": "US-6b566d8e88863148abe3f872f1c1e33b-867364322"}`
-		c.Set("Content-Type", "application/json;charset=utf-8")
-		c.Set("X-Frame-Options", "DENY")
-		c.Set("Server", "Apache")
-		c.Set("Content-Length", fmt.Sprintf("%d", len(payload)))
+		// Get user credentials
+		accountNameStr := l.GetInputs()[0].GetValue()
+		passwordStr := l.GetInputs()[1].GetValue()
 
-		return c.Send([]byte(payload))
+		err := accMgr.Authenticate(accountNameStr, passwordStr)
+		if err != nil {
+			return SendErrorResponse(c, err.Error())
+		}
+
+		return SendSuccessResponse(c)
 	})
 
 	log.Println("Starting webserver on :6969")
 	log.Fatal(app.Listen(":6969"))
+}
+
+// Sets common HTTP headers for the response
+func SetCommonHeaders(c *fiber.Ctx) {
+	c.Set("Content-Type", "application/json;charset=utf-8")
+	c.Set("X-Frame-Options", "DENY")
+	c.Set("Server", "Apache")
+}
+
+// Returns a successful authentication response
+func SendSuccessResponse(c *fiber.Ctx) error {
+	successPayload := `{
+	"authentication_state": "DONE", 
+	"login_ticket": "US-6b566d8e88863148abe3f872f1c1e33b-867364322"
+	}`
+	SetCommonHeaders(c)
+	c.Set("Content-Length", fmt.Sprintf("%d", len(successPayload)))
+	return c.Status(fiber.StatusOK).SendString(successPayload)
+}
+
+// Returns an error response
+func SendErrorResponse(c *fiber.Ctx, errorMessage string) error {
+	errorPayload := fmt.Sprintf(`{
+        "authentication_state": "LOGIN",
+        "error_code": "INVALID_ACCOUNT_OR_CREDENTIALS",
+        "error_message": "%s",
+        "input_id": "password",
+        "support_error_code": "BLZBNTTAS00000002",
+        "error_status": "WARNING",
+        "error_message_helper": "Please enter the correct email and password."
+    }`, errorMessage)
+
+	SetCommonHeaders(c)
+	c.Set("Content-Length", fmt.Sprintf("%d", len(errorPayload)))
+	return c.Status(fiber.StatusUnauthorized).SendString(errorPayload)
 }
 
 /*
